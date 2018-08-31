@@ -3,4 +3,5 @@
 *.txt
 *.zip
 Simulation/.ipynb_checkpoints/
+Agent/.ipynb_checkpoints/
 Agent/__pycache__/

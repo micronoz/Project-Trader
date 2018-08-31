@@ -1,7 +1,7 @@
 
 # coding: utf-8
 
-# In[7]:
+# In[13]:
 
 
 import pandas as pd
@@ -10,7 +10,7 @@ import itertools
 import numpy as np
 
 
-# In[82]:
+# In[15]:
 
 
 class Market:
@@ -32,6 +32,8 @@ class Market:
         pairs = list(itertools.permutations(currencies, 2))
         self.df = self.importFile(pairs)
         self.timeframe = timeframe
+        self.initPortfolio()
+        self.fillInData()
         
     def importFile(self, pairs):
         df = {}
@@ -100,7 +102,7 @@ class Market:
     
     def calculateValue(self):
         totalValue = self.value
-        priceChange = self.getRates()
+        priceChange = self.getRates(self.getCurrentTime())
         newValue = np.sum(np.multiply(self.portfolio, priceChange))
         self.value *= newValue
         
@@ -109,7 +111,7 @@ class Market:
         self.portfolio[target] += amount
         self.value -= amount * self.fee * self.value
     
-    def getRates(self):
+    def getRates(self, qDate):
         rates = np.zeros(shape=(len(self.currencies), 1))
         rates[0,0] = 1
         for i in range(1, len(self.currencies)):
@@ -117,18 +119,19 @@ class Market:
             pair = self.referenceCurrency + current
             if pair in self.df.keys():
                 index = self.df[pair].loc[self.df[pair]['Timestamp'] 
-                                     == self.getCurrentTime()].index.values[0]
-                initialPrice = 1/self.df[pair].loc[index - 1, 'Open']
-                finalPrice = 1/self.df[pair].loc[index, 'Open']
+                                     == qDate].index.values[0]
+                initialPrice = 1/self.df[pair].loc[index, 'Open']
+                finalPrice = 1/self.df[pair].loc[index + 1, 'Open']
                 rates[i, 0] = finalPrice/initialPrice
             else:
                 pair = current + self.referenceCurrency
                 index = self.df[pair].loc[self.df[pair]['Timestamp'] 
-                                     == self.getCurrentTime()].index.values[0]
-                initialPrice = self.df[pair].loc[index - 1, 'Open']
-                finalPrice = self.df[pair].loc[index, 'Open']
+                                     == qDate].index.values[0]
+                initialPrice = self.df[pair].loc[index, 'Open']
+                finalPrice = self.df[pair].loc[index + 1, 'Open']
                 rates[i, 0] = finalPrice/initialPrice
         return rates
+    
     def fillInData(self):
         referenceFrame = self.df[self.majorPairs[0]]
         for pair in self.df.keys():
@@ -145,33 +148,34 @@ class Market:
                     continue
                 startValue = editFrame.loc[0, 'Open']
                 amplify = (index[0]/250000)
-                extracted['Open'] = np.fromfunction(lambda i, j: (amplify + 1)*startValue - i*(amplify*startValue/index[0]), shape=(index[0], 1))
-                extracted['Close'] = np.fromfunction(lambda i, j: (amplify + 1)*startValue - i*(amplify*startValue/index[0]), shape=(index[0], 1))
-                extracted['High'] = np.fromfunction(lambda i, j: (amplify + 1)*startValue - i*(amplify*startValue/index[0]), shape=(index[0], 1))
-                extracted['Low'] = np.fromfunction(lambda i, j: (amplify + 1)*startValue - i*(amplify*startValue/index[0]), shape=(index[0], 1))
+                extracted['Open'] = np.fromfunction(lambda i, j: (1/amplify)*startValue + i*((1-(1/amplify))*startValue/index[0]), shape=(index[0], 1))
+                extracted['Close'] = np.fromfunction(lambda i, j: (1/amplify)*startValue + i*((1-(1/amplify))*startValue/index[0]), shape=(index[0], 1))
+                extracted['High'] = np.fromfunction(lambda i, j: (1/amplify)*startValue + i*((1-(1/amplify))*startValue/index[0]), shape=(index[0], 1))
+                extracted['Low'] = np.fromfunction(lambda i, j: (1/amplify)*startValue + i*((1-(1/amplify))*startValue/index[0]), shape=(index[0], 1))
                 self.df[pair] = pd.concat([extracted, self.df[pair]])
                 self.df[pair] = self.df[pair].reset_index(drop=True)
 
                 
-    def processTimePeriod(self, timePeriod):
-        priceMatrix = np.zeros(shape=(3, len(self.currencies), timePeriod))
-        currentTime = self.getCurrentTime()
+    
+    def processTimePeriod(self, timePeriod, lastDate):
+        priceMatrix = np.zeros(shape=(len(self.currencies), timePeriod, 3))
+        currentTime = lastDate
         dimensions = ['Open', 'High', 'Low']
-        dimension = -1
         absoluteValue = 0
-        for dimensionName in dimensions:
-            dimension += 1
-            m = 0
-            for currency in self.currencies:
+        m = 0
+        for currency in self.currencies:
+            dimension = -1
+            for dimensionName in dimensions:
+                dimension += 1
                 if currency == self.reference:
-                    priceMatrix[dimension, m, :] = 1
+                    priceMatrix[m, :, dimension] = 1
                 else:
                     if currency + self.referenceCurrency in self.df.keys():
                         pair = currency + self.referenceCurrency
                     elif self.referenceCurrency + currency in self.df.keys():
                         pair = self.referenceCurrency + currency
                     else:
-                        raise NameError('Currency does not exist.')
+                        raise ValueError('Currency does not exist.')
                     i = self.df[pair].loc[self.df[pair]['Timestamp'] 
                                  == currentTime].index
 #                     if len(i) == 0:
@@ -184,36 +188,11 @@ class Market:
                     if len(i) == 1:
                         index = int(i[0])
                         openValues = self.df[pair].iloc[index-timePeriod+1:index+1, self.df[pair].columns.get_loc(dimensionName)].values
+            
                     if dimensionName == 'Open':
                         absoluteValue = openValues[-1]
                     openProcessed = openValues / absoluteValue
-                    #print(openProcessed)
-                    priceMatrix[dimension, m, :] = openProcessed
-                m += 1
-
-
-# In[83]:
-
-
-test = Market(['EUR','USD', 'JPY', 'TRY'], os.path.abspath('../Data_Processing/ProcessedData'))
-
-
-# In[86]:
-
-
-#Test
-
-test.initPortfolio()
-test.fillInData()
-test.processTimePeriod(test.timeframe)
-# test.calculateValue()
-# reallocation = np.array([0.7, 0.3])[np.newaxis]
-# test.reallocate(reallocation.T)
-#print(test.df['EURUSD'].loc[50:100, ['Open']].values)
-
-
-# In[85]:
-
-
-test.df['USDTRY']
+                    priceMatrix[m, :, dimension] = openProcessed
+            m += 1
+        return priceMatrix
 
