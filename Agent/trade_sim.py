@@ -34,6 +34,7 @@ class Market:
         self.timeframe = timeframe
         self.initPortfolio()
         self.fillInData()
+        self.allDates = self.getAllDates()
         
     def importFile(self, pairs):
         df = {}
@@ -111,24 +112,30 @@ class Market:
         self.portfolio[target] += amount
         self.value -= amount * self.fee * self.value
     
-    def getRates(self, qDate):
+    def getRates(self, dateIndex):
         rates = np.zeros(shape=(len(self.currencies), 1))
         rates[0,0] = 1
         for i in range(1, len(self.currencies)):
             current = self.currencies[i]
             pair = self.referenceCurrency + current
             if pair in self.df.keys():
-                index = self.df[pair].loc[self.df[pair]['Timestamp'] 
-                                     == qDate].index.values[0]
-                initialPrice = 1/self.df[pair].loc[index, 'Open']
-                finalPrice = 1/self.df[pair].loc[index + 1, 'Open']
+                index = []
+                offSet = 0
+                while len(index) == 0:
+                    index = self.df[pair].loc[self.df[pair]['Timestamp'] == self.allDates[dateIndex + offSet]].index.values
+                    offSet += 1
+                initialPrice = 1/self.df[pair].loc[index[0], 'Open']
+                finalPrice = 1/self.df[pair].loc[index[0] + 1, 'Open']
                 rates[i, 0] = finalPrice/initialPrice
             else:
                 pair = current + self.referenceCurrency
-                index = self.df[pair].loc[self.df[pair]['Timestamp'] 
-                                     == qDate].index.values[0]
-                initialPrice = self.df[pair].loc[index, 'Open']
-                finalPrice = self.df[pair].loc[index + 1, 'Open']
+                index = []
+                offSet = 0
+                while len(index) == 0:
+                    index = self.df[pair].loc[self.df[pair]['Timestamp'] == self.allDates[dateIndex + offSet]].index.values
+                    offSet += 1
+                initialPrice = self.df[pair].loc[index[0], 'Open']
+                finalPrice = self.df[pair].loc[index[0] + 1, 'Open']
                 rates[i, 0] = finalPrice/initialPrice
         return rates
     
@@ -160,6 +167,7 @@ class Market:
     
     def processTimePeriod(self, resultQ, timePeriod, lastDate, startIndex, size):
         allPrices = []
+        allRates = []
         dimensions = ['Open', 'High', 'Low']
         count = 0
         for timeIndex in range(startIndex, (startIndex + size) if (startIndex + size) < len(lastDate) else len(lastDate)-1):
@@ -184,16 +192,17 @@ class Market:
                         else:
                             raise ValueError('Currency does not exist.')
                         
-                        i = self.df[pair].loc[self.df[pair]['Timestamp'] == lastDate[timeIndex]].index
+                        i = self.df[pair].loc[self.df[pair]['Timestamp'] == lastDate[timeIndex]].index.values
                         
                         if len(i) > 1:
                             raise NameError('More than one matching date found!')
                         elif len(i) == 0:
                             timeOffset = 1
                             while len(i) != 1 and timeIndex + timeOffset < len(lastDate):
-                                i = self.df[pair].loc[self.df[pair]['Timestamp'] == lastDate[timeIndex + timeOffset]].index
+                                i = self.df[pair].loc[self.df[pair]['Timestamp'] == lastDate[timeIndex + timeOffset]].index.values
                                 timeOffset += 1
                         if len(i) == 1:
+                            timeOffset = 0
                             index = int(i[0])
                             if index-timePeriod+1 < 0:
                                 allPrices.append(None)
@@ -201,15 +210,20 @@ class Market:
                                 break
                         openValues = self.df[pair].iloc[index-timePeriod+1:index+1,
                                                         self.df[pair].columns.get_loc(dimensionName)].values
-
+                        #print(self.df[pair].iloc[index-timePeriod+1:index+2,
+                          #                              self.df[pair].columns.get_loc(dimensionName)].values)
                         if dimensionName == 'Open':
                             absoluteValue = openValues[-1]
                         openProcessed = openValues / absoluteValue
+                        
                         priceMatrix[m, :, dimension] = openProcessed
                 m += 1
                 if restart == True:
                     break
             if restart == False:
                 allPrices.append(priceMatrix)
-        resultQ.put(allPrices)
+                allRates.append(self.getRates(timeIndex))
+        resultQ.put((allPrices, allRates))
+        print('Done')
+        return
 
