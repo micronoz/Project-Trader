@@ -154,45 +154,62 @@ class Market:
                 extracted['Low'] = np.fromfunction(lambda i, j: (1/amplify)*startValue + i*((1-(1/amplify))*startValue/index[0]), shape=(index[0], 1))
                 self.df[pair] = pd.concat([extracted, self.df[pair]])
                 self.df[pair] = self.df[pair].reset_index(drop=True)
-
                 
+    def getAllDates(self):
+        return self.df[self.majorPairs[0] if self.majorPairs[0] in self.df.keys() else self.majorPairs[1]].loc[:, 'Timestamp'].values
     
-    def processTimePeriod(self, timePeriod, lastDate):
-        priceMatrix = np.zeros(shape=(len(self.currencies), timePeriod, 3))
-        currentTime = lastDate
+    def processTimePeriod(self, resultQ, timePeriod, lastDate, startIndex, size):
+        allPrices = []
         dimensions = ['Open', 'High', 'Low']
-        absoluteValue = 0
-        m = 0
-        for currency in self.currencies:
-            dimension = -1
-            for dimensionName in dimensions:
-                dimension += 1
-                if currency == self.reference:
-                    priceMatrix[m, :, dimension] = 1
-                else:
-                    if currency + self.referenceCurrency in self.df.keys():
-                        pair = currency + self.referenceCurrency
-                    elif self.referenceCurrency + currency in self.df.keys():
-                        pair = self.referenceCurrency + currency
-                    else:
-                        raise ValueError('Currency does not exist.')
-                    i = self.df[pair].loc[self.df[pair]['Timestamp'] 
-                                 == currentTime].index
-#                     if len(i) == 0:
-#                         openValues = np.ones(shape=(1, timePeriod))
-#                         for i in range(timePeriod):
-#                             openValues[1, i] = 0.99
-#                             openValues[1, i+1] = 1.01
-#                             i += 1
-#                         dimensionName = 'Missing'
-                    if len(i) == 1:
-                        index = int(i[0])
-                        openValues = self.df[pair].iloc[index-timePeriod+1:index+1, self.df[pair].columns.get_loc(dimensionName)].values
+        count = 0
+        for timeIndex in range(startIndex, (startIndex + size) if (startIndex + size) < len(lastDate) else len(lastDate)-1):
+            count += 1
             
-                    if dimensionName == 'Open':
-                        absoluteValue = openValues[-1]
-                    openProcessed = openValues / absoluteValue
-                    priceMatrix[m, :, dimension] = openProcessed
-            m += 1
-        return priceMatrix
+            m = 0
+            absoluteValue = 0
+            priceMatrix = np.zeros(shape=(len(self.currencies), timePeriod, 3))
+            restart = False
+         
+            for currency in self.currencies:
+                dimension = -1
+                for dimensionName in dimensions:
+                    dimension += 1
+                    if currency == self.reference:
+                        priceMatrix[m, :, dimension] = 1
+                    else:
+                        if currency + self.referenceCurrency in self.df.keys():
+                            pair = currency + self.referenceCurrency
+                        elif self.referenceCurrency + currency in self.df.keys():
+                            pair = self.referenceCurrency + currency
+                        else:
+                            raise ValueError('Currency does not exist.')
+                        
+                        i = self.df[pair].loc[self.df[pair]['Timestamp'] == lastDate[timeIndex]].index
+                        
+                        if len(i) > 1:
+                            raise NameError('More than one matching date found!')
+                        elif len(i) == 0:
+                            timeOffset = 1
+                            while len(i) != 1 and timeIndex + timeOffset < len(lastDate):
+                                i = self.df[pair].loc[self.df[pair]['Timestamp'] == lastDate[timeIndex + timeOffset]].index
+                                timeOffset += 1
+                        if len(i) == 1:
+                            index = int(i[0])
+                            if index-timePeriod+1 < 0:
+                                allPrices.append(None)
+                                restart = True
+                                break
+                        openValues = self.df[pair].iloc[index-timePeriod+1:index+1,
+                                                        self.df[pair].columns.get_loc(dimensionName)].values
+
+                        if dimensionName == 'Open':
+                            absoluteValue = openValues[-1]
+                        openProcessed = openValues / absoluteValue
+                        priceMatrix[m, :, dimension] = openProcessed
+                m += 1
+                if restart == True:
+                    break
+            if restart == False:
+                allPrices.append(priceMatrix)
+        resultQ.put(allPrices)
 
