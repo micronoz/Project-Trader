@@ -211,7 +211,7 @@ class Market:
                         openValues = self.df[pair].iloc[index-timePeriod+1:index+1,
                                                         self.df[pair].columns.get_loc(dimensionName)].values
                         #print(self.df[pair].iloc[index-timePeriod+1:index+2,
-                          #                              self.df[pair].columns.get_loc(dimensionName)].values)
+                         #                               self.df[pair].columns.get_loc(dimensionName)].values)
                         if dimensionName == 'Open':
                             absoluteValue = openValues[-1]
                         openProcessed = openValues / absoluteValue
