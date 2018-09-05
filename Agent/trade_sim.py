@@ -137,7 +137,6 @@ class Market:
                 initialPrice = self.df[pair].loc[index[0], 'Open']
                 finalPrice = self.df[pair].loc[index[0] + 1, 'Open']
                 rates[i, 0] = finalPrice/initialPrice
-        print(rates)
         return rates
     
     def fillInData(self):
