@@ -1,7 +1,7 @@
 
 # coding: utf-8
 
-# In[1]:
+# In[22]:
 
 
 import tensorflow as tf
@@ -13,29 +13,28 @@ from multiprocessing import Process, SimpleQueue
 import random
 
 
-# In[2]:
+# In[30]:
 
 
 class Agent:
     def __init__(self, numberOfCurrencies, timeFrame, sess, initialPortfolio=10000.0):
         self._s = sess
         self.inputT = tf.placeholder(shape=[None, numberOfCurrencies, timeFrame, 3], dtype=tf.float32)
-        self.conv1 = tf.layers.conv2d(inputs=self.inputT, filters=200, kernel_size=[1,3])
+        self.conv1 = tf.layers.conv2d(inputs=self.inputT, filters=20, kernel_size=[1,3])
       #  self.conv1 = tf.nn.depthwise_conv2d(self.inputT, [1,3,3,4], [1,1,1,1], 'SAME')
-        self.conv2 = tf.layers.conv2d(inputs=self.conv1, filters=300, kernel_size=[1,8])
+        self.conv2 = tf.layers.conv2d(inputs=self.conv1, filters=50, kernel_size=[1,8])
         self.conv3 = tf.layers.conv2d(inputs = self.conv2, filters=100, kernel_size=[1,41])
-        self.conv4 = tf.layers.conv2d(inputs=self.conv3, filters=20, kernel_size=[1,1])
-        self.final = tf.layers.dense(self.conv4, 20000, activation='relu')
-        self.final2 = tf.layers.dense(self.final, 1, activation='relu')
+        self.conv4 = tf.layers.conv2d(inputs=self.conv3, filters=150, kernel_size=[1,1])
+        self.final = tf.layers.dense(self.conv4, 20000)
+        self.final2 = tf.layers.dense(self.final, 1)
         self._allocate = tf.nn.softmax(self.final2, axis=1)
         
         self.priceChanges = tf.placeholder(shape=[None, numberOfCurrencies, 1], dtype=tf.float32)
         
-        self.calc = tf.nn.leaky_relu(-tf.log(self.priceChanges))
         self.loss = -tf.matmul(tf.matrix_transpose(tf.nn.leaky_relu(tf.log(self.priceChanges), alpha=10)),tf.reshape(self._allocate, [-1, numberOfCurrencies, 1]))
-        self.averageLoss = tf.reduce_mean(tf.matmul(tf.matrix_transpose(self.priceChanges), 
+        self.averageLoss = tf.matmul(tf.matrix_transpose(self.priceChanges), 
                                              tf.scalar_mul(tf.constant(initialPortfolio), 
-                                               tf.reshape(self._allocate, [-1, numberOfCurrencies, 1]))))
+                                               tf.reshape(self._allocate, [-1, numberOfCurrencies, 1])))
         self.optimizer = tf.train.AdamOptimizer(learning_rate=0.001)
         self._train = self.optimizer.minimize(self.loss)
         
@@ -46,12 +45,11 @@ class Agent:
         batch_feed = {self.inputT : obs,
                      self.priceChanges: prices
                      }
-        _, lossValue, inputMat, actualLoss, calc= self._s.run([self._train, self.averageLoss, self._allocate, self.loss, self.calc], feed_dict=batch_feed)
-        print(inputMat, actualLoss, calc)
+        _, lossValue = self._s.run([self._train, self.averageLoss], feed_dict=batch_feed)
         return lossValue
 
 
-# In[3]:
+# In[31]:
 
 
 def importData(simulator):
@@ -61,7 +59,7 @@ def importData(simulator):
     PERIOD_SIZE = 50
     BATCH_SIZE = 1
     BATCH_COUNT = 1
-    BATCH_OFFSET = 100
+    BATCH_OFFSET = 101
     dates = testSim.getAllDates()
     index = list(range(BATCH_COUNT))
     feed = []
@@ -92,11 +90,11 @@ def importData(simulator):
     return feed
 
 
-# In[4]:
+# In[32]:
 
 
 def main():
-    testSim = Market(['EUR','USD'], os.path.abspath('/mnt/disks/ProcessedData'))
+    testSim = Market(['EUR','USD'], os.path.abspath('../Data_Processing/ProcessedData'))
     seeds = [3, 5, 7]
     with tf.Session() as sess:
         tf.set_random_seed(seeds[1])
@@ -108,6 +106,7 @@ def main():
         prices = []
         batches = []
         
+        
             
         for episode in range(10000):
             print("Episode: {}".format(episode))
@@ -116,7 +115,7 @@ def main():
             count = len(feed)
             while len(index) != 0:
                 for i in random.sample(index, 1):
-                    with tf.device("/gpu:0"):
+                    with tf.device('/gpu:0'):
                         loss += test1.train_step(feed[i][0], feed[i][1])
                     index.remove(i)
             print(loss/count)
@@ -139,7 +138,7 @@ def main():
         
 
 
-# In[5]:
+# In[33]:
 
 
 if __name__ == "__main__":
