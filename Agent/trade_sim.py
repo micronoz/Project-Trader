@@ -124,8 +124,11 @@ class Market:
                 while len(index) == 0:
                     index = self.df[pair].loc[self.df[pair]['Timestamp'] == self.allDates[dateIndex + offSet]].index.values
                     offSet += 1
-                initialPrice = 1/self.df[pair].loc[index[0], 'Open']
-                finalPrice = 1/self.df[pair].loc[index[0] + 1, 'Open']
+                dividers = self.df[pair].loc[index[0]:index[0]+2, 'Open'].values
+#                 initialPrice = 1/self.df[pair].loc[index[0], 'Open']
+#                 finalPrice = 1/self.df[pair].loc[index[0] + 1, 'Open']
+                initialPrice = 1/dividers[0]
+                finalPrice = 1/dividers[1]
                 rates[i, 0] = finalPrice/initialPrice
             else:
                 pair = current + self.referenceCurrency
@@ -134,10 +137,12 @@ class Market:
                 while len(index) == 0:
                     index = self.df[pair].loc[self.df[pair]['Timestamp'] == self.allDates[dateIndex + offSet]].index.values
                     offSet += 1
-                initialPrice = self.df[pair].loc[index[0], 'Open']
-                finalPrice = self.df[pair].loc[index[0] + 1, 'Open']
+                dividers = self.df[pair].loc[index[0]:index[0]+2, 'Open'].values
+#                 initialPrice = self.df[pair].loc[index[0], 'Open']
+#                 finalPrice = self.df[pair].loc[index[0] + 1, 'Open']
+                initialPrice = dividers[0]
+                finalPrice = dividers[1]
                 rates[i, 0] = finalPrice/initialPrice
-        print(rates)
         return rates
     
     def fillInData(self):
@@ -172,6 +177,7 @@ class Market:
         dimensions = ['Open', 'High', 'Low']
         count = 0
         for timeIndex in range(startIndex, (startIndex + size) if (startIndex + size) < len(lastDate) else len(lastDate)-1):
+            print(count)
             count += 1
             
             m = 0
@@ -180,44 +186,40 @@ class Market:
             restart = False
          
             for currency in self.currencies:
-                dimension = -1
-                for dimensionName in dimensions:
-                    dimension += 1
-                    if currency == self.reference:
-                        priceMatrix[m, :, dimension] = 1
+                first = True
+                if currency == self.reference:
+                    priceMatrix[m, :, :] = 1
+                else:
+                    if currency + self.referenceCurrency in self.df.keys():
+                        pair = currency + self.referenceCurrency
+                    elif self.referenceCurrency + currency in self.df.keys():
+                        pair = self.referenceCurrency + currency
                     else:
-                        if currency + self.referenceCurrency in self.df.keys():
-                            pair = currency + self.referenceCurrency
-                        elif self.referenceCurrency + currency in self.df.keys():
-                            pair = self.referenceCurrency + currency
-                        else:
-                            raise ValueError('Currency does not exist.')
-                        
-                        i = self.df[pair].loc[self.df[pair]['Timestamp'] == lastDate[timeIndex]].index.values
-                        
-                        if len(i) > 1:
-                            raise NameError('More than one matching date found!')
-                        elif len(i) == 0:
-                            timeOffset = 1
-                            while len(i) != 1 and timeIndex + timeOffset < len(lastDate):
-                                i = self.df[pair].loc[self.df[pair]['Timestamp'] == lastDate[timeIndex + timeOffset]].index.values
-                                timeOffset += 1
-                        if len(i) == 1:
-                            timeOffset = 0
-                            index = int(i[0])
-                            if index-timePeriod+1 < 0:
-                                allPrices.append(None)
-                                restart = True
-                                break
-                        openValues = self.df[pair].iloc[index-timePeriod+1:index+1,
-                                                        self.df[pair].columns.get_loc(dimensionName)].values
-                        #print(self.df[pair].iloc[index-timePeriod+1:index+2,
-                         #                               self.df[pair].columns.get_loc(dimensionName)].values)
-                        if dimensionName == 'Open':
-                            absoluteValue = openValues[-1]
-                        openProcessed = openValues / absoluteValue
-                        
-                        priceMatrix[m, :, dimension] = openProcessed
+                        raise ValueError('Currency does not exist.')
+
+                    i = self.df[pair].loc[self.df[pair]['Timestamp'] == lastDate[timeIndex]].index.values
+
+                    if len(i) > 1:
+                        raise NameError('More than one matching date found!')
+                    elif len(i) == 0:
+                        timeOffset = 1
+                        while len(i) != 1 and timeIndex + timeOffset < len(lastDate):
+                            i = self.df[pair].loc[self.df[pair]['Timestamp'] == lastDate[timeIndex + timeOffset]].index.values
+                            timeOffset += 1
+                    if len(i) == 1:
+                        timeOffset = 0
+                        index = int(i[0])
+                        if index-timePeriod+1 < 0:
+                            allPrices.append(None)
+                            restart = True
+                            break
+                    openValues = self.df[pair].iloc[index-timePeriod+1:index+1, 1:4].values
+                    #print(self.df[pair].iloc[index-timePeriod+1:index+2,
+                     #                               self.df[pair].columns.get_loc(dimensionName)].values)
+                    absoluteValue = openValues[-1][0]
+                    openProcessed = openValues / absoluteValue
+                   
+                    priceMatrix[m, :, :] = openProcessed
                 m += 1
                 if restart == True:
                     break

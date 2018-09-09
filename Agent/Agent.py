@@ -20,21 +20,26 @@ class Agent:
     def __init__(self, numberOfCurrencies, timeFrame, sess, initialPortfolio=10000.0):
         self._s = sess
         self.inputT = tf.placeholder(shape=[None, numberOfCurrencies, timeFrame, 3], dtype=tf.float32)
-        self.conv1 = tf.layers.conv2d(inputs=self.inputT, filters=20, kernel_size=[1,3])
+        self.conv1 = tf.layers.conv2d(inputs=self.inputT, filters=2, kernel_size=[1,3], activation=tf.nn.relu)
       #  self.conv1 = tf.nn.depthwise_conv2d(self.inputT, [1,3,3,4], [1,1,1,1], 'SAME')
-        self.conv2 = tf.layers.conv2d(inputs=self.conv1, filters=50, kernel_size=[1,8])
-        self.conv3 = tf.layers.conv2d(inputs = self.conv2, filters=100, kernel_size=[1,41])
-        self.conv4 = tf.layers.conv2d(inputs=self.conv3, filters=150, kernel_size=[1,1])
-        self.final = tf.layers.dense(self.conv4, 20000)
-        self.final2 = tf.layers.dense(self.final, 1)
+        #self.conv2 = tf.layers.conv2d(inputs=self.conv1, filters=150, kernel_size=[1,8], activation=tf.nn.relu)
+        #self.conv3 = tf.layers.conv2d(inputs = self.conv2, filters=200, kernel_size=[1,41], activation=tf.nn.relu)
+        #self.conv4 = tf.layers.conv2d(inputs=self.conv3, filters=30, kernel_size=[1,1] , activation=tf.nn.relu)
+        self.conv2 = tf.layers.conv2d(inputs=self.conv1, filters=30, kernel_size=[1,48], activation=tf.nn.relu)
+        self.final = tf.layers.dense(self.conv2, 20000, activation=tf.nn.relu)
+        self.hidden0 = tf.layers.dense(self.final, 1000, activation=tf.nn.relu)
+        self.hidden = tf.layers.dense(self.hidden0, 2000, activation=tf.nn.relu)
+        self.final2 = tf.layers.dense(self.hidden, 1)
         self._allocate = tf.nn.softmax(self.final2, axis=1)
         
         self.priceChanges = tf.placeholder(shape=[None, numberOfCurrencies, 1], dtype=tf.float32)
         
-        self.loss = -tf.matmul(tf.matrix_transpose(tf.nn.leaky_relu(tf.log(self.priceChanges), alpha=10)),tf.reshape(self._allocate, [-1, numberOfCurrencies, 1]))
-        self.averageLoss = tf.matmul(tf.matrix_transpose(self.priceChanges), 
+        #self.loss = -tf.matmul(tf.matrix_transpose(tf.nn.leaky_relu(tf.log(self.priceChanges), alpha=10)),tf.reshape(self._allocate, [-1, numberOfCurrencies, 1]))
+        self.averageLoss = tf.reduce_mean(tf.matmul(tf.matrix_transpose(self.priceChanges), 
                                              tf.scalar_mul(tf.constant(initialPortfolio), 
-                                               tf.reshape(self._allocate, [-1, numberOfCurrencies, 1])))
+                                               tf.reshape(self._allocate, [-1, numberOfCurrencies, 1]))))
+
+        self.loss = tf.exp(tf.reduce_sum(tf.multiply(-tf.log(self.priceChanges), tf.reshape(self._allocate, [tf.shape(self._allocate)[0], numberOfCurrencies, 1]))))
         self.optimizer = tf.train.AdamOptimizer(learning_rate=0.001)
         self._train = self.optimizer.minimize(self.loss)
         
@@ -57,9 +62,9 @@ def importData(simulator):
     q = SimpleQueue()
     jobs = []
     PERIOD_SIZE = 50
-    BATCH_SIZE = 1
+    BATCH_SIZE = 100
     BATCH_COUNT = 1
-    BATCH_OFFSET = 101
+    BATCH_OFFSET = 100
     dates = testSim.getAllDates()
     index = list(range(BATCH_COUNT))
     feed = []
@@ -77,7 +82,6 @@ def importData(simulator):
         count = 0
         for p in jobs:
             if not p.is_alive():
-                print('Terminating')
                 p.terminate()
                 jobs.remove(p)
             else:
@@ -94,14 +98,13 @@ def importData(simulator):
 
 
 def main():
-    testSim = Market(['EUR','USD'], os.path.abspath('../Data_Processing/ProcessedData'))
+    testSim = Market(['EUR','USD'], os.path.abspath('/mnt/disks/ProcessedData'))
     seeds = [3, 5, 7]
     with tf.Session() as sess:
         tf.set_random_seed(seeds[1])
         test1 = Agent(len(testSim.currencies), 50, sess)
         
         feed = importData(testSim)
-        print(feed)
         sess.run(tf.global_variables_initializer())
         prices = []
         batches = []
