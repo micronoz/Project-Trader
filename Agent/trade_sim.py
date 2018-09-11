@@ -177,7 +177,7 @@ class Market:
         dimensions = ['Open', 'High', 'Low']
         count = 0
         for timeIndex in range(startIndex, (startIndex + size) if (startIndex + size) < len(lastDate) else len(lastDate)-1):
-            print(count)
+          
             count += 1
             
             m = 0
@@ -227,6 +227,8 @@ class Market:
                 allPrices.append(priceMatrix)
                 allRates.append(self.getRates(timeIndex))
         resultQ.put((allPrices, allRates))
+        resultQ.close()
+        resultQ.join_thread()
         print('Done')
         return
 
