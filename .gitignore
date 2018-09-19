@@ -5,3 +5,5 @@
 Simulation/.ipynb_checkpoints/
 Agent/.ipynb_checkpoints/
 Agent/__pycache__/
+Agent/Batches/
+Agent/Labels/

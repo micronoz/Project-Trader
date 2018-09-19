@@ -172,23 +172,21 @@ class Market:
         return self.df[self.majorPairs[0] if self.majorPairs[0] in self.df.keys() else self.majorPairs[1]].loc[:, 'Timestamp'].values
     
     def processTimePeriod(self, resultQ, timePeriod, lastDate, startIndex, size):
-        allPrices = []
-        allRates = []
+        allPrices = np.zeros(shape=(size, len(self.currencies), timePeriod, 3))
+        allRates = np.zeros(shape=(size, len(self.currencies), 1))
         dimensions = ['Open', 'High', 'Low']
-        count = 0
+        count = -1
         for timeIndex in range(startIndex, (startIndex + size) if (startIndex + size) < len(lastDate) else len(lastDate)-1):
-            print(count)
             count += 1
-            
             m = 0
             absoluteValue = 0
-            priceMatrix = np.zeros(shape=(len(self.currencies), timePeriod, 3))
+            #priceMatrix = np.zeros(shape=(len(self.currencies), timePeriod, 3))
             restart = False
          
             for currency in self.currencies:
                 first = True
                 if currency == self.reference:
-                    priceMatrix[m, :, :] = 1
+                    allPrices[count, m, :, :] = 1
                 else:
                     if currency + self.referenceCurrency in self.df.keys():
                         pair = currency + self.referenceCurrency
@@ -219,13 +217,13 @@ class Market:
                     absoluteValue = openValues[-1][0]
                     openProcessed = openValues / absoluteValue
                    
-                    priceMatrix[m, :, :] = openProcessed
+                    allPrices[count, m, :, :] = openProcessed
                 m += 1
                 if restart == True:
                     break
             if restart == False:
-                allPrices.append(priceMatrix)
-                allRates.append(self.getRates(timeIndex))
+                #allPrices[count] = (priceMatrix)
+                allRates[count] = (self.getRates(timeIndex))
         resultQ.put((allPrices, allRates))
         resultQ.close()
         resultQ.join_thread()
