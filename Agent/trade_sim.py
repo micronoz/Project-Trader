@@ -197,20 +197,17 @@ class Market:
                     else:
                         raise ValueError('Currency does not exist.')
                     index = 0
-                    indexOffset = 0
+                    indexOffset = -1
                     while index-timePeriod+1 < 0:
+                        indexOffset += 1
                         i = self.df[pair].loc[self.df[pair]['Timestamp'] == lastDate[timeIndex + indexOffset]].index.values
                         if len(i) >= 1:
                             index = int(i[0])
-                        indexOffset += 1
+                        
 
                     if len(i) > 1:
                         raise NameError('More than one matching date found!')
-                    elif len(i) == 0:
-                        timeOffset = 1
-                        while len(i) != 1 and timeIndex + timeOffset < len(lastDate):
-                            i = self.df[pair].loc[self.df[pair]['Timestamp'] == lastDate[timeIndex + timeOffset]].index.values
-                            timeOffset += 1
+
                     if len(i) == 1:
                         index = int(i[0])
                         if index-timePeriod+1 < 0:
@@ -229,7 +226,7 @@ class Market:
                     break
             if restart == False:
                 #allPrices[count] = (priceMatrix)
-                allRates[count] = (self.getRates(max(timeIndex+indexOffset, timeIndex+timeOffset)))
+                allRates[count] = (self.getRates(timeIndex+indexOffset))
             print(count)
         resultQ.put((allPrices, allRates))
         resultQ.close()
