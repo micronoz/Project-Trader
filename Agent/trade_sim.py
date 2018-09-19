@@ -226,6 +226,7 @@ class Market:
             if restart == False:
                 #allPrices[count] = (priceMatrix)
                 allRates[count] = (self.getRates(timeIndex))
+            print(count)
         resultQ.put((allPrices, allRates))
         resultQ.close()
         resultQ.join_thread()
