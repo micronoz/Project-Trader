@@ -173,7 +173,7 @@ class Market:
         return self.df[self.majorPairs[0] if self.majorPairs[0] in self.df.keys() else self.majorPairs[1]].loc[:, 'Timestamp'].values
     
     def processTimePeriod(self, resultQ, timePeriod, lastDate, startIndex, size):
-        now = time.time()
+        #now = time.time()
         allPrices = np.zeros(shape=(size, len(self.currencies), timePeriod, 3))
         allRates = np.zeros(shape=(size, len(self.currencies), 1))
         dimensions = ['Open', 'High', 'Low']
@@ -231,7 +231,7 @@ class Market:
         resultQ.put((allPrices, allRates))
         resultQ.close()
         resultQ.join_thread()
-        later = time.time()
-        print("Time for batch:{} seconds".format(int(later-now)))
+        #later = time.time()
+        #print("Time for batch:{} seconds".format(int(later-now)))
         return
 
