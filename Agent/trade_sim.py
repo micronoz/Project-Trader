@@ -116,16 +116,16 @@ class Market:
     def getRates(self, dateIndex):
         rates = np.zeros(shape=(len(self.currencies), 1))
         rates[0,0] = 1
+        print(dateIndex)
         for i in range(1, len(self.currencies)):
             current = self.currencies[i]
             pair = self.referenceCurrency + current
+            print(pair)
+            if current == self.referenceCurrency:
+                continue
             if pair in self.df.keys():
-                index = []
-                offSet = 0
-                while len(index) == 0:
-                    index = self.df[pair].loc[self.df[pair]['Timestamp'] == self.allDates[dateIndex + offSet]].index.values
-                    offSet += 1
-                dividers = self.df[pair].loc[index[0]:index[0]+2, 'Open'].values
+                index = dateIndex - 1
+                dividers = self.df[pair].iloc[index:index+2]['Open'].values
 #                 initialPrice = 1/self.df[pair].loc[index[0], 'Open']
 #                 finalPrice = 1/self.df[pair].loc[index[0] + 1, 'Open']
                 initialPrice = 1/dividers[0]
@@ -133,16 +133,14 @@ class Market:
                 rates[i, 0] = finalPrice/initialPrice
             else:
                 pair = current + self.referenceCurrency
-                index = []
-                offSet = 0
-                while len(index) == 0:
-                    index = self.df[pair].loc[self.df[pair]['Timestamp'] == self.allDates[dateIndex + offSet]].index.values
-                    offSet += 1
-                dividers = self.df[pair].loc[index[0]:index[0]+2, 'Open'].values
+                index = dateIndex - 1
+                dividers = self.df[pair].iloc[index:index+2]['Open'].values
 #                 initialPrice = self.df[pair].loc[index[0], 'Open']
 #                 finalPrice = self.df[pair].loc[index[0] + 1, 'Open']
-                initialPrice = dividers[0]
-                finalPrice = dividers[1]
+                print(dividers)
+                print(self.df[pair])
+                initialPrice = dividers[0][0]
+                finalPrice = dividers[0][1]
                 rates[i, 0] = finalPrice/initialPrice
         return rates
     
@@ -172,64 +170,72 @@ class Market:
     def getAllDates(self):
         return self.df[self.majorPairs[0] if self.majorPairs[0] in self.df.keys() else self.majorPairs[1]].loc[:, 'Timestamp'].values
     
-    def processTimePeriod(self, resultD, timePeriod, lastDate, startIndex, size):
+    def processTimePeriod(self, resultD, timePeriod, lastDate, startIndex, size, prevIndex):
         #now = time.time()
         allPrices = np.zeros(shape=(size, len(self.currencies), timePeriod, 3))
         allRates = np.zeros(shape=(size, len(self.currencies), 1))
         dimensions = ['Open', 'High', 'Low']
-        count = -1
-        for timeIndex in range(startIndex, (startIndex + size) if (startIndex + size) < len(lastDate) else len(lastDate)-1):
-            count += 1
-            m = 0
-            absoluteValue = 0
-            #priceMatrix = np.zeros(shape=(len(self.currencies), timePeriod, 3))
-            restart = False
-         
-            for currency in self.currencies:
-                first = True
-                if currency == self.reference:
+        indices = (startIndex, (startIndex + size) if (startIndex + size) < len(lastDate) else len(lastDate)-1)
+        m = 0
+        absoluteValue = 0
+        #priceMatrix = np.zeros(shape=(len(self.currencies), timePeriod, 3))
+        restart = False
+        prevIndices = prevIndex
+        for currency in self.currencies:
+            first = True
+            
+            if currency + self.referenceCurrency in self.df.keys():
+                pair = currency + self.referenceCurrency
+            elif self.referenceCurrency + currency in self.df.keys():
+                pair = self.referenceCurrency + currency
+            elif self.referenceCurrency == currency:
+                count = 0
+                for i in range(size):
                     allPrices[count, m, :, :] = 1
-                else:
-                    if currency + self.referenceCurrency in self.df.keys():
-                        pair = currency + self.referenceCurrency
-                    elif self.referenceCurrency + currency in self.df.keys():
-                        pair = self.referenceCurrency + currency
-                    else:
-                        raise ValueError('Currency does not exist.')
-                    index = 0
-                    indexOffset = -1
-                    while index-timePeriod+1 < 0:
-                        indexOffset += 1
-                        i = self.df[pair].loc[self.df[pair]['Timestamp'] == lastDate[timeIndex + indexOffset]].index.values
-                        if len(i) >= 1:
-                            index = int(i[0])
-                        
-
-                    if len(i) > 1:
-                        raise NameError('More than one matching date found!')
-
-                    if len(i) == 1:
+                    count += 1
+                continue
+            else:
+                raise ValueError('Currency does not exist.')
+            index = 0
+            indexOffset = -1
+            if prevIndices[m] < 0:
+                while index-timePeriod+1 < 0:
+                    indexOffset += 1
+                    i = self.df[pair].loc[self.df[pair]['Timestamp'] == lastDate[indices[0] + indexOffset]].index.values
+                    if len(i) >= 1:
                         index = int(i[0])
-                        if index-timePeriod+1 < 0:
-                            allPrices.append(None)
-                            restart = True
-                            break
-                    openValues = self.df[pair].iloc[index-timePeriod+1:index+1, 1:4].values
-                    #print(self.df[pair].iloc[index-timePeriod+1:index+2,
-                     #                               self.df[pair].columns.get_loc(dimensionName)].values)
-                    absoluteValue = openValues[-1][0]
-                    openProcessed = openValues / absoluteValue
-                   
-                    allPrices[count, m, :, :] = openProcessed
-                m += 1
-                if restart == True:
-                    break
-            if restart == False:
-                #allPrices[count] = (priceMatrix)
-                allRates[count] = (self.getRates(timeIndex+indexOffset))
-            print(count)
+
+                if len(i) > 1:
+                    raise NameError('More than one matching date found!')
+
+                index = int(i[0])
+                prevIndices[m] = index + 1
+            else:
+                print("HERE")
+                index = prevIndices[m]
+                prevIndices[m] += 1
+            if index-timePeriod < 0:
+                allPrices.append(None)
+                restart = True
+                break
+            batchValues = self.df[pair].iloc[index-timePeriod:index + size - 1, 1:4].values
+            count = 0
+            for i in range(size):
+                openValues = batchValues[i:timePeriod+i]
+            #print(self.df[pair].iloc[index-timePeriod+1:index+2,
+             #                               self.df[pair].columns.get_loc(dimensionName)].values)
+                absoluteValue = openValues[-1][0]
+                openProcessed = openValues / absoluteValue
+                allPrices[count, m, :, :] = openProcessed
+                count += 1
+            if restart == True:
+                break
+        if restart == False:
+            #allPrices[count] = (priceMatrix)
+            allRates[count] = (self.getRates(prevIndices[m])) #TODO
+            m += 1 #TODO 
         resultD.append((allPrices, allRates))
         #later = time.time()
         #print("Time for batch:{} seconds".format(int(later-now)))
-        return
+        return prevIndices
 
