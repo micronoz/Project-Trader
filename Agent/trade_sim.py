@@ -47,13 +47,17 @@ class Market:
                 if dataPath.endswith('/'):
                     if os.path.isfile(dataPath + pair + '.csv'):
                         df[pair] = pd.read_csv(dataPath + pair + '.csv', delimiter='\t', 
-                                               usecols=['Timestamp', 'Open', 'High', 'Low', 'Close'])
+                                                usecols=['Timestamp', 'Open', 'High', 'Low', 'Close'])
+                        num = df[pair]._get_numeric_data()
+                        num[num < 0] = 1
                     else:
                         continue
                 else:
                     if os.path.isfile(dataPath + '/' + pair + '.csv'):
                         df[pair] = (pd.read_csv(dataPath + '/' + pair + '.csv', delimiter='\t', 
                                                 usecols=['Timestamp', 'Open', 'High', 'Low', 'Close']))
+                        num = df[pair]._get_numeric_data()
+                        num[num < 0] = 1
                     else:
                         continue
         return df
@@ -235,6 +239,12 @@ class Market:
                 allPrices[count, m, :, :] = openProcessed
 #                 print('Rate limit is {}'.format(index  + i))
                 allRates[count] = (self.getRates(index  + i))
+                if np.any(allRates[count] < 0):
+                    print("ERROR")
+                    print(currency)
+                    print(index-timePeriod)
+                    print(index+size-1)
+                    print(index+i)
                 count += 1
             if restart == True:
                 break
