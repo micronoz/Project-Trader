@@ -11,8 +11,8 @@ import numpy as np
 import time
 
 
-# In[15]:
 
+#This class is for simulating the currency trade market for the agent to experiment in
 
 class Market:
     def __init__(self, currencies, dataPath, referenceCurrencyM='USD', 
@@ -116,22 +116,19 @@ class Market:
         self.portfolio[source] -= amount
         self.portfolio[target] += amount
         self.value -= amount * self.fee * self.value
-    
+ 
+    #Needs fixing
     def getRates(self, dateIndex):
         rates = np.zeros(shape=(len(self.currencies), 1))
         rates[0,0] = 1
-#         print(dateIndex)
         for i in range(1, len(self.currencies)):
             current = self.currencies[i]
             pair = self.referenceCurrency + current
-#             print(pair)
             if current == self.referenceCurrency:
                 continue
             if pair in self.df.keys():
                 index = dateIndex - 1
                 dividers = self.df[pair].iloc[index:index+2]['Open'].values
-#                 initialPrice = 1/self.df[pair].loc[index[0], 'Open']
-#                 finalPrice = 1/self.df[pair].loc[index[0] + 1, 'Open']
                 initialPrice = dividers[0]
                 finalPrice = dividers[1]
                 rates[i, 0] = 1/(finalPrice/initialPrice)
@@ -139,10 +136,6 @@ class Market:
                 pair = current + self.referenceCurrency
                 index = dateIndex - 1
                 dividers = self.df[pair].iloc[index:index+2]['Open'].values
-#                 initialPrice = self.df[pair].loc[index[0], 'Open']
-#                 finalPrice = self.df[pair].loc[index[0] + 1, 'Open']
-#                 print(dividers)
-#                 print(self.df[pair])
                 initialPrice = dividers[0]
                 finalPrice = dividers[1]
                 rates[i, 0] = finalPrice/initialPrice
@@ -182,7 +175,6 @@ class Market:
         indices = (startIndex, (startIndex + size) if (startIndex + size) < len(lastDate) else len(lastDate)-1)
         m = 0
         absoluteValue = 0
-        #priceMatrix = np.zeros(shape=(len(self.currencies), timePeriod, 3))
         restart = False
         prevIndices = prevIndex
         for currency in self.currencies:
@@ -226,18 +218,13 @@ class Market:
                 break
             deviation = 0
             batchValues = self.df[pair].iloc[index-timePeriod + deviation:index + size - 1 + deviation, 1:4].values
-#             print(batchValues)
-#             print(index-timePeriod)
-#             print('Upper limit is {}'.format(index+size-1))
             count = 0
+            
             for i in range(size):
                 openValues = batchValues[i:timePeriod+i]
-            #print(self.df[pair].iloc[index-timePeriod+1:index+2,
-             #                               self.df[pair].columns.get_loc(dimensionName)].values)
                 absoluteValue = openValues[-1][0]
                 openProcessed = openValues / absoluteValue
                 allPrices[count, m, :, :] = openProcessed
-#                 print('Rate limit is {}'.format(index  + i))
                 allRates[count] = (self.getRates(index  + i))
                 if np.any(allRates[count] < 0):
                     print("ERROR")
@@ -251,7 +238,5 @@ class Market:
             if restart == False:
                 m += 1
         resultD.append((allPrices, allRates))
-        #later = time.time()
-        #print("Time for batch:{} seconds".format(int(later-now)))
         return prevIndices
 
