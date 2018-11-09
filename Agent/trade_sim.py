@@ -47,7 +47,7 @@ class Market:
                 if dataPath.endswith('/'):
                     if os.path.isfile(dataPath + pair + '.csv'):
                         df[pair] = pd.read_csv(dataPath + pair + '.csv', delimiter='\t', 
-                                                usecols=['Timestamp', 'Open', 'High', 'Low', 'Close'])
+                                                usecols=['Timestamp', 'Open', 'High', 'Low', 'Vol'])
                         num = df[pair]._get_numeric_data()
                         num[num < 0] = 1
                     else:
@@ -55,7 +55,7 @@ class Market:
                 else:
                     if os.path.isfile(dataPath + '/' + pair + '.csv'):
                         df[pair] = (pd.read_csv(dataPath + '/' + pair + '.csv', delimiter='\t', 
-                                                usecols=['Timestamp', 'Open', 'High', 'Low', 'Close']))
+                                                usecols=['Timestamp', 'Open', 'High', 'Low', 'Vol']))
                         num = df[pair]._get_numeric_data()
                         num[num < 0] = 1
                     else:
@@ -158,7 +158,7 @@ class Market:
                 startValue = editFrame.loc[0, 'Open']
                 amplify = (index[0]/250000)
                 extracted['Open'] = np.fromfunction(lambda i, j: (1/amplify)*startValue + i*((1-(1/amplify))*startValue/index[0]), shape=(index[0], 1))
-                extracted['Close'] = np.fromfunction(lambda i, j: (1/amplify)*startValue + i*((1-(1/amplify))*startValue/index[0]), shape=(index[0], 1))
+                extracted['Vol'] = np.zeros(shape=(index[0], 1))
                 extracted['High'] = np.fromfunction(lambda i, j: (1/amplify)*startValue + i*((1-(1/amplify))*startValue/index[0]), shape=(index[0], 1))
                 extracted['Low'] = np.fromfunction(lambda i, j: (1/amplify)*startValue + i*((1-(1/amplify))*startValue/index[0]), shape=(index[0], 1))
                 self.df[pair] = pd.concat([extracted, self.df[pair]])
@@ -167,76 +167,106 @@ class Market:
     def getAllDates(self):
         return self.df[self.majorPairs[0] if self.majorPairs[0] in self.df.keys() else self.majorPairs[1]].loc[:, 'Timestamp'].values
     
-    def processTimePeriod(self, resultD, timePeriod, lastDate, startIndex, size, prevIndex):
-        #now = time.time()
+    def processTimePeriod(self, timePeriod, index, size):
         allPrices = np.zeros(shape=(size, len(self.currencies), timePeriod, 3))
         allRates = np.zeros(shape=(size, len(self.currencies), 1))
         dimensions = ['Open', 'High', 'Low']
-        indices = (startIndex, (startIndex + size) if (startIndex + size) < len(lastDate) else len(lastDate)-1)
         m = 0
-        absoluteValue = 0
-        restart = False
-        prevIndices = prevIndex
         for currency in self.currencies:
-            first = True
-            
             if currency + self.referenceCurrency in self.df.keys():
                 pair = currency + self.referenceCurrency
             elif self.referenceCurrency + currency in self.df.keys():
                 pair = self.referenceCurrency + currency
             elif self.referenceCurrency == currency:
-                count = 0
                 for i in range(size):
-                    allPrices[count, m, :, :] = 1
-                    count += 1
+                    allPrices[i, m, :, :] = 1
+                    allRates[i, m, 0] = 1
                 m += 1
                 continue
             else:
-                raise ValueError('Currency does not exist.')
-            index = 0
-            indexOffset = -1
-            if prevIndices[m] < 0:
-                while index-timePeriod+1 < 0:
-                    indexOffset += 1
-                    i = self.df[pair].loc[self.df[pair]['Timestamp'] == lastDate[indices[0] + indexOffset]].index.values
-                    if len(i) >= 1:
-                        index = int(i[0])
-
-                if len(i) > 1:
-                    raise NameError('More than one matching date found!')
-
-                index = int(i[0])
-                prevIndices[m] = index + size
-            else:
-              
-                index = prevIndices[m]
-                prevIndices[m] += size
-            if index-timePeriod < 0:
-                allPrices.append(None)
-                restart = True
-                raise ValueError('Wrong index')
-                break
-            deviation = 0
-            batchValues = self.df[pair].iloc[index-timePeriod + deviation:index + size - 1 + deviation, 1:4].values
-            count = 0
-            
+                raise ValueError('Wrong currency parameter.')
+            batchValues = self.df[pair].iloc[index : index + timePeriod + size, 1:4].values
             for i in range(size):
-                openValues = batchValues[i:timePeriod+i]
-                absoluteValue = openValues[-1][0]
-                openProcessed = openValues / absoluteValue
-                allPrices[count, m, :, :] = openProcessed
-                allRates[count] = (self.getRates(index  + i))
-                if np.any(allRates[count] < 0):
-                    print("ERROR")
-                    print(currency)
-                    print(index-timePeriod)
-                    print(index+size-1)
-                    print(index+i)
-                count += 1
-            if restart == True:
-                break
-            if restart == False:
-                m += 1
-        resultD.append((allPrices, allRates))
-        return prevIndices
+                movement = batchValues[i:timePeriod+i]
+                refVal = movement[-1][0]
+                movement = movement / refVal
+                nextPrice = batchValues[timePeriod+i][0]
+                rate = nextPrice / refVal
+                if (pair[0:3] == 'USD'):
+                    movement[0:3] **= -1
+                    allPrices[i, m, :, :] = movement
+                    allRates[i, m, 0] = 1/rate
+                else:
+                    allPrices[i, m, :, :] = movement
+                    allRates[i, m, 0] = rate
+            m += 1
+        return (allPrices, allRates)
+            
+    
+#     def processTimePeriod(self, resultD, timePeriod, lastDate, startIndex, size, prevIndex):
+#         allPrices = np.zeros(shape=(size, len(self.currencies), timePeriod, 3))
+#         allRates = np.zeros(shape=(size, len(self.currencies), 1))
+#         dimensions = ['Open', 'High', 'Low']
+#         indices = (startIndex, (startIndex + size) if (startIndex + size) < len(lastDate) else len(lastDate)-1)
+#         m = 0
+#         absoluteValue = 0
+#         restart = False
+#         prevIndices = prevIndex
+#         for currency in self.currencies:
+#             first = True
+#             if currency + self.referenceCurrency in self.df.keys():
+#                 pair = currency + self.referenceCurrency
+#             elif self.referenceCurrency + currency in self.df.keys():
+#                 pair = self.referenceCurrency + currency
+#             elif self.referenceCurrency == currency:
+#                 count = 0
+#                 for i in range(size):
+#                     allPrices[count, m, :, :] = 1
+#                     count += 1
+#                 m += 1
+#                 continue
+#             else:
+#                 raise ValueError('Currency does not exist.')
+#             index = 0
+#             indexOffset = -1
+#             if prevIndices[m] < 0:
+#                 while index-timePeriod+1 < 0:
+#                     indexOffset += 1
+#                     i = self.df[pair].loc[self.df[pair]['Timestamp'] == lastDate[indices[0] + indexOffset]].index.values
+#                     if len(i) >= 1:
+#                         index = int(i[0])
+#                 if len(i) > 1:
+#                     raise NameError('More than one matching date found!')
+#                 index = int(i[0])
+#                 prevIndices[m] = index + size
+#             else:
+#                 index = prevIndices[m]
+#                 prevIndices[m] += size
+#             if index-timePeriod < 0:
+#                 allPrices.append(None)
+#                 restart = True
+#                 raise ValueError('Wrong index')
+#                 break
+#             deviation = 0
+#             batchValues = self.df[pair].iloc[index-timePeriod + deviation:index + size - 1 + deviation, 1:4].values
+#             count = 0
+#             for i in range(size):
+#                 openValues = batchValues[i:timePeriod+i]
+#                 absoluteValue = openValues[-1][0]
+#                 openProcessed = openValues / absoluteValue
+#                 allPrices[count, m, :, :] = openProcessed
+#                 allRates[count] = (self.getRates(index  + i))
+#                 if np.any(allRates[count] < 0):
+#                     print("ERROR")
+#                     print(currency)
+#                     print(index-timePeriod)
+#                     print(index+size-1)
+#                     print(index+i)
+#                 count += 1
+#             if restart == True:
+#                 break
+#             if restart == False:
+#                 m += 1
+#         resultD.append((allPrices, allRates))
+#         return prevIndices
 
